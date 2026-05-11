@@ -18,7 +18,7 @@ OBJETIVOS = {
     "Rama 5 (Consumo/REITs)": 0.10
 }
 
-# 3. Cantidades Actuales
+# 3. Cantidades Actuales (Tus datos reales)
 posiciones_iniciales = {
     "VTI": 9.497, "NVDA": 13.766, "TSM": 4.952, "CLS": 3.075, 
     "KOF": 10.012, "IONQ": 19.735, "GOOGL": 1.660, "AAPL": 1.556, 
@@ -47,15 +47,14 @@ for rama, tickers in ramas_map.items():
 
 # 5. Lógica de Conversión y Ejecución
 if st.button("🚀 ACTUALIZAR VALORES"):
-    with st.spinner("Obteniendo precios y TRM..."):
-        # Obtener TRM Actual (USD/COP)
+    with st.spinner("Consultando precios y TRM..."):
         trm = 1.0
         if moneda == "COP":
             try:
                 trm = yf.Ticker("COP=X").fast_info['lastPrice']
                 st.sidebar.success(f"TRM Consultada: ${trm:,.2f} COP")
             except:
-                trm = 3950.0 # Valor de respaldo por si falla la API
+                trm = 3950.0
                 st.sidebar.warning("Usando TRM de respaldo ($3,950)")
 
         total_cartera = 0
@@ -68,8 +67,7 @@ if st.button("🚀 ACTUALIZAR VALORES"):
                 if cant > 0:
                     try:
                         precio_usd = yf.Ticker(t).fast_info['lastPrice']
-                        valor_pos_usd = precio_usd * cant
-                        valor_pos_convertido = valor_pos_usd * trm
+                        valor_pos_convertido = (precio_usd * cant) * trm
                         
                         valores_por_rama[rama] += valor_pos_convertido
                         total_cartera += valor_pos_convertido
@@ -77,16 +75,17 @@ if st.button("🚀 ACTUALIZAR VALORES"):
                         datos_acciones.append({
                             "Ticker": t,
                             "Precio (Local)": f"${precio_usd * trm:,.2f}",
-                            "Mi Valor": valor_pos_convertido,
+                            "Mi Valor (Local)": valor_pos_convertido,
                             "Rama": rama
                         })
                     except: pass
 
-    # 6. Resultados
+    # 6. Resultados Principales
     simbolo = "$" if moneda == "USD" else "COP $"
     st.metric(f"VALOR TOTAL EN {moneda}", f"{simbolo}{total_cartera:,.2f}")
 
-    st.subheader(f"📋 Plan de Rebalanceo ({moneda})")
+    # Tabla de Rebalanceo
+    st.subheader(f"📊 Plan de Rebalanceo ({moneda})")
     analisis = []
     for rama, peso_obj in OBJETIVOS.items():
         v_actual = valores_por_rama[rama]
@@ -98,8 +97,26 @@ if st.button("🚀 ACTUALIZAR VALORES"):
             "Rama": rama,
             "Actual (%)": f"{p_actual*100:.1f}%",
             "Meta (%)": f"{peso_obj*100:.0f}%",
-            "Diferencia": f"{simbolo}{dif:,.2f}",
+            "Diferencia": f"{'+' if dif > 0 else ''}{simbolo}{dif:,.2f}",
             "Acción": "🟢 COMPRAR" if dif > 0 else "🔴 VENDER"
         })
     st.table(pd.DataFrame(analisis))
 
+    # --- NUEVA SECCIÓN RESTAURADA: DETALLE ACCIÓN POR ACCIÓN ---
+    st.divider()
+    st.subheader("🔍 Detalle Acción por Acción")
+    if datos_acciones:
+        df_detalle = pd.DataFrame(datos_acciones)
+        # Formatear la columna Mi Valor para que se vea bien en pesos o dólares
+        df_detalle["Mi Valor (Local)"] = df_detalle["Mi Valor (Local)"].map(lambda x: f"{simbolo}{x:,.2f}")
+        st.dataframe(df_detalle, use_container_width=True)
+    else:
+        st.info("No hay acciones con cantidades mayores a 0 para mostrar.")
+
+# 7. Gráfico Histórico
+st.divider()
+st.subheader("📈 Monitor de Tendencia (USD)")
+ticker_sel = st.selectbox("Selecciona para ver historial mensual", ["VTI", "NVDA", "TSM", "AAPL", "GOOGL", "KOF", "COIN"])
+if ticker_sel:
+    hist = yf.Ticker(ticker_sel).history(period="1mo")
+    st.line_chart(hist.Close)
