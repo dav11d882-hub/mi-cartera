@@ -3,8 +3,8 @@ import yfinance as yf
 import pandas as pd
 
 # 1. Configuración de la Interfaz
-st.set_page_config(page_title="Algoritmo de Inversión Pro", layout="wide")
-st.title("🛡️ Sistema de Gestión de Cartera Automática")
+st.set_page_config(page_title="Algoritmo Pro - Mi Cartera", layout="wide")
+st.title("🛡️ Sistema de Gestión de Cartera en Tiempo Real")
 
 # 2. Definición del Algoritmo (Pesos Objetivo)
 OBJETIVOS = {
@@ -15,72 +15,87 @@ OBJETIVOS = {
     "Rama 5 (Consumo/REITs)": 0.10
 }
 
-# Mapeo de tus activos reales a las ramas
+# Clasificación de tus activos reales
 activos_usuario = {
     "Rama 1 (VTI - Núcleo)": ["VTI"],
-    "Rama 2 (Tecnología/Crecimiento)": ["NVDA", "TSM", "CLS", "GOOGL", "AAPL", "MU", "AVGO", "IONQ", "APP", "COIN"],
+    "Rama 2 (Tecnología/Crecimiento)": ["NVDA", "TSM", "GOOGL", "AAPL", "MU", "AVGO", "IONQ", "APP", "COIN", "CLS"],
     "Rama 3 (Oro/Refugio)": ["GLD"], 
     "Rama 4 (Bonos/Estabilidad)": ["BND"],
-    "Rama 5 (Consumo/REITs)": ["KOF", "PEP", "COKE", "PG", "V", "BLK", "NU"]
+    "Rama 5 (Consumo/REITs)": ["KOF", "PEP", "COKE", "PG", "V", "BLK", "NU", "BA"]
 }
 
-# 3. Sidebar para entrada de datos (Cantidad de acciones que ya tienes)
-st.sidebar.header("📥 Tus Tenencias Actuales")
+# 3. Sidebar: Entrada de cantidades
+st.sidebar.header("📥 Tus Acciones Actuales")
 cantidades = {}
 for rama, tickers in activos_usuario.items():
     with st.sidebar.expander(f"Editar {rama}"):
         for t in tickers:
-            cantidades[t] = st.number_input(f"Cantidad de {t}", min_value=0.0, value=0.0, step=0.1, key=t)
+            # Valores por defecto basados en tus capturas para facilitarte el llenado
+            default_val = 0.0
+            if t == "VTI": default_val = 9.49
+            if t == "NVDA": default_val = 13.76
+            if t == "TSM": default_val = 4.95
+            
+            cantidades[t] = st.number_input(f"Cant. {t}", min_value=0.0, value=default_val, step=0.01, key=t)
 
-# 4. Lógica de Cálculo
-if st.button("🔄 EJECUTAR ANÁLISIS DE MERCADO"):
-    with st.spinner("Obteniendo precios en tiempo real..."):
-        datos_actuales = {}
+# 4. Botón Principal
+if st.button("🔄 ACTUALIZAR PRECIOS EN VIVO"):
+    with st.spinner("Conectando con la bolsa de valores..."):
         total_cartera = 0
+        datos_por_accion = []
+        resumen_ramas = {rama: 0.0 for rama in OBJETIVOS.keys()}
         
-        # Obtener precios y calcular valor actual por rama
-        resumen_ramas = {}
         for rama, tickers in activos_usuario.items():
-            valor_rama = 0
             for t in tickers:
-                try:
-                    precio = yf.Ticker(t).fast_info['lastPrice']
-                    valor_posicion = precio * cantidades[t]
-                    valor_rama += valor_posicion
-                except:
-                    st.error(f"No se pudo obtener precio para {t}")
-            
-            resumen_ramas[rama] = valor_rama
-            total_cartera += valor_rama
+                if cantidades[t] > 0:
+                    try:
+                        ticker_data = yf.Ticker(t)
+                        # Obtenemos precio actual
+                        precio_actual = ticker_data.fast_info['lastPrice']
+                        valor_posicion = precio_actual * cantidades[t]
+                        
+                        resumen_ramas[rama] += valor_posicion
+                        total_cartera += valor_posicion
+                        
+                        datos_por_accion.append({
+                            "Ticker": t,
+                            "Precio Actual": f"${precio_actual:,.22f}",
+                            "Valor Total": valor_posicion,
+                            "Rama": rama
+                        })
+                    except:
+                        st.error(f"Error cargando {t}")
 
-    # 5. Mostrar Resultados
-    st.metric("Valor Total de tu Portafolio", f"${total_cartera:,.2f} USD")
+    # 5. Visualización de Resultados
+    st.metric("VALOR TOTAL DE TU CARTERA (USD)", f"${total_cartera:,.2f}")
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Estado Actual vs Objetivo")
-        tabla_datos = []
-        for rama in OBJETIVOS.keys():
-            monto_actual = resumen_ramas[rama]
-            porcentaje_actual = (monto_actual / total_cartera) * 100 if total_cartera > 0 else 0
-            monto_objetivo = total_cartera * OBJETIVOS[rama]
-            diferencia = monto_objetivo - monto_actual
-            
-            tabla_datos.append({
-                "Rama": rama,
-                "Actual ($)": round(monto_actual, 2),
-                "Actual (%)": f"{porcentaje_actual:.1f}%",
-                "Objetivo (%)": f"{OBJETIVOS[rama]*100:.0f}%",
-                "Acción": "COMPRAR" if diferencia > 0 else "VENDER",
-                "Monto Ajuste": abs(round(diferencia, 2))
-            })
+    # Tabla Comparativa de Ramas
+    st.subheader("📊 Análisis de Rebalanceo")
+    analisis_data = []
+    for rama in OBJETIVOS.keys():
+        actual = resumen_ramas[rama]
+        porc_actual = (actual / total_cartera) if total_cartera > 0 else 0
+        objetivo_usd = total_cartera * OBJETIVOS[rama]
+        diff = objetivo_usd - actual
         
-        df = pd.DataFrame(tabla_datos)
-        st.table(df)
+        analisis_data.append({
+            "Rama": rama,
+            "Actual (%)": f"{porc_actual*100:.1f}%",
+            "Objetivo (%)": f"{OBJETIVOS[rama]*100:.0f}%",
+            "Diferencia (USD)": f"{'+' if diff > 0 else ''}${diff:,.22f}",
+            "Estado": "Bajo Peso (Comprar)" if diff > 0 else "Sobre Peso (Vender)"
+        })
+    st.table(pd.DataFrame(analisis_data))
 
-    with col2:
-        st.subheader("Gráfico de Distribución")
-        st.bar_chart(df.set_index('Rama')['Actual ($)'])
+    # Detalle por Acción
+    with st.expander("🔍 Ver detalle por acción individual"):
+        st.dataframe(pd.DataFrame(datos_por_accion), use_container_width=True)
 
-    st.success("💡 CONSEJO DEL ALGORITMO: Para progresar solo, vende los excedentes en rojo y compra los faltantes en verde una vez al mes.")
+# 6. Gráfico Histórico al final
+st.divider()
+st.subheader("📈 Monitor de Tendencia")
+ticker_sel = st.selectbox("Selecciona una acción para ver su gráfico mensual", 
+                         ["NVDA", "VTI", "TSM", "AAPL", "GOOGL", "KOF", "COIN"])
+if ticker_sel:
+    hist = yf.Ticker(ticker_sel).history(period="1mo")
+    st.line_chart(hist.Close)
