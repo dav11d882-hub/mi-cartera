@@ -4,7 +4,7 @@ import pandas as pd
 
 # 1. Configuración de la Interfaz
 st.set_page_config(page_title="Algoritmo Pro - Mi Cartera", layout="wide")
-st.title("🛡️ Sistema de Gestión de Cartera en Tiempo Real")
+st.title("🛡️ Sistema de Gestión de Cartera Inteligente")
 
 # 2. Definición del Algoritmo (Pesos Objetivo)
 OBJETIVOS = {
@@ -15,87 +15,99 @@ OBJETIVOS = {
     "Rama 5 (Consumo/REITs)": 0.10
 }
 
-# Clasificación de tus activos reales
-activos_usuario = {
-    "Rama 1 (VTI - Núcleo)": ["VTI"],
-    "Rama 2 (Tecnología/Crecimiento)": ["NVDA", "TSM", "GOOGL", "AAPL", "MU", "AVGO", "IONQ", "APP", "COIN", "CLS"],
-    "Rama 3 (Oro/Refugio)": ["GLD"], 
-    "Rama 4 (Bonos/Estabilidad)": ["BND"],
-    "Rama 5 (Consumo/REITs)": ["KOF", "PEP", "COKE", "PG", "V", "BLK", "NU", "BA"]
+# 3. BASE DE DATOS DE TUS ACCIONES ACTUALES (Aquí se mantienen tus cantidades)
+# Puedes editar estos números directamente en el código cuando tus posiciones cambien mucho
+posiciones_iniciales = {
+    "VTI": 9.497, "NVDA": 13.766, "TSM": 4.952, "CLS": 3.075, 
+    "KOF": 10.012, "IONQ": 19.735, "GOOGL": 1.660, "AAPL": 1.556, 
+    "BA": 1.458, "PEP": 2.212, "MU": 0.382, "V": 0.812, 
+    "APP": 0.548, "COKE": 1.152, "GTY": 5.0, "BLK": 0.127, 
+    "PG": 0.605, "COIN": 0.410, "AVGO": 0.175, "NU": 5.0,
+    "GLD": 0.0, "BND": 0.0  # Estas empiezan en 0 para que el algoritmo te diga cuánto comprar
 }
 
-# 3. Sidebar: Entrada de cantidades
-st.sidebar.header("📥 Tus Acciones Actuales")
-cantidades = {}
-for rama, tickers in activos_usuario.items():
-    with st.sidebar.expander(f"Editar {rama}"):
+# Clasificación por Ramas
+ramas_map = {
+    "Rama 1 (VTI - Núcleo)": ["VTI"],
+    "Rama 2 (Tecnología/Crecimiento)": ["NVDA", "TSM", "CLS", "IONQ", "GOOGL", "AAPL", "MU", "APP", "COIN", "AVGO"],
+    "Rama 3 (Oro/Refugio)": ["GLD"], 
+    "Rama 4 (Bonos/Estabilidad)": ["BND"],
+    "Rama 5 (Consumo/REITs)": ["KOF", "BA", "PEP", "V", "COKE", "GTY", "BLK", "PG", "NU"]
+}
+
+# 4. Sidebar: Interfaz para ajustar cantidades manualmente
+st.sidebar.header("⚙️ Ajustar Cantidades Actuales")
+cantidades_finales = {}
+
+for rama, tickers in ramas_map.items():
+    with st.sidebar.expander(f"Configurar {rama}"):
         for t in tickers:
-            # Valores por defecto basados en tus capturas para facilitarte el llenado
-            default_val = 0.0
-            if t == "VTI": default_val = 9.49
-            if t == "NVDA": default_val = 13.76
-            if t == "TSM": default_val = 4.95
-            
-            cantidades[t] = st.number_input(f"Cant. {t}", min_value=0.0, value=default_val, step=0.01, key=t)
+            # El valor por defecto se toma de 'posiciones_iniciales'
+            valor_base = posiciones_iniciales.get(t, 0.0)
+            cantidades_finales[t] = st.number_input(
+                f"Acciones de {t}", 
+                min_value=0.0, 
+                value=float(valor_base), 
+                step=0.001, 
+                key=f"input_{t}"
+            )
 
-# 4. Botón Principal
-if st.button("🔄 ACTUALIZAR PRECIOS EN VIVO"):
-    with st.spinner("Conectando con la bolsa de valores..."):
+# 5. Ejecución del Algoritmo
+if st.button("🚀 CALCULAR REBALANCEO EN TIEMPO REAL"):
+    with st.spinner("Consultando precios de mercado..."):
         total_cartera = 0
-        datos_por_accion = []
-        resumen_ramas = {rama: 0.0 for rama in OBJETIVOS.keys()}
+        datos_acciones = []
+        valores_por_rama = {rama: 0.0 for rama in OBJETIVOS.keys()}
         
-        for rama, tickers in activos_usuario.items():
+        for rama, tickers in ramas_map.items():
             for t in tickers:
-                if cantidades[t] > 0:
-                    try:
-                        ticker_data = yf.Ticker(t)
-                        # Obtenemos precio actual
-                        precio_actual = ticker_data.fast_info['lastPrice']
-                        valor_posicion = precio_actual * cantidades[t]
-                        
-                        resumen_ramas[rama] += valor_posicion
-                        total_cartera += valor_posicion
-                        
-                        datos_por_accion.append({
-                            "Ticker": t,
-                            "Precio Actual": f"${precio_actual:,.22f}",
-                            "Valor Total": valor_posicion,
-                            "Rama": rama
-                        })
-                    except:
-                        st.error(f"Error cargando {t}")
+                cant = cantidades_finales[t]
+                if t in ["GLD", "BND"] and cant == 0:
+                    continue # No procesar si aún no compramos de estas
+                
+                try:
+                    tick = yf.Ticker(t)
+                    precio = tick.fast_info['lastPrice']
+                    valor_pos = precio * cant
+                    
+                    valores_por_rama[rama] += valor_pos
+                    total_cartera += valor_pos
+                    
+                    datos_acciones.append({
+                        "Ticker": t,
+                        "Precio": f"${precio:,.2f}",
+                        "Mi Valor": valor_pos,
+                        "Rama": rama
+                    })
+                except:
+                    pass
 
-    # 5. Visualización de Resultados
-    st.metric("VALOR TOTAL DE TU CARTERA (USD)", f"${total_cartera:,.2f}")
-    
-    # Tabla Comparativa de Ramas
-    st.subheader("📊 Análisis de Rebalanceo")
-    analisis_data = []
-    for rama in OBJETIVOS.keys():
-        actual = resumen_ramas[rama]
-        porc_actual = (actual / total_cartera) if total_cartera > 0 else 0
-        objetivo_usd = total_cartera * OBJETIVOS[rama]
-        diff = objetivo_usd - actual
+    # 6. Mostrar métricas principales
+    st.metric("VALOR TOTAL DEL PORTAFOLIO", f"${total_cartera:,.2f} USD")
+
+    # Tabla de Decisiones
+    st.subheader("📋 Plan de Acción para Progresar")
+    analisis = []
+    for rama, peso_obj in OBJETIVOS.items():
+        v_actual = valores_por_rama[rama]
+        p_actual = (v_actual / total_cartera) if total_cartera > 0 else 0
+        v_objetivo = total_cartera * peso_obj
+        dif = v_objetivo - v_actual
         
-        analisis_data.append({
+        analisis.append({
             "Rama": rama,
-            "Actual (%)": f"{porc_actual*100:.1f}%",
-            "Objetivo (%)": f"{OBJETIVOS[rama]*100:.0f}%",
-            "Diferencia (USD)": f"{'+' if diff > 0 else ''}${diff:,.22f}",
-            "Estado": "Bajo Peso (Comprar)" if diff > 0 else "Sobre Peso (Vender)"
+            "Distribución Actual": f"{p_actual*100:.1f}%",
+            "Meta": f"{peso_obj*100:.0f}%",
+            "Ajuste Necesario (USD)": f"{'+' if dif > 0 else ''}${dif:,.2f}",
+            "Instrucción": "🟢 COMPRAR" if dif > 0 else "🔴 VENDER / COSECHAR"
         })
-    st.table(pd.DataFrame(analisis_data))
+    
+    st.table(pd.DataFrame(analisis))
 
-    # Detalle por Acción
-    with st.expander("🔍 Ver detalle por acción individual"):
-        st.dataframe(pd.DataFrame(datos_por_accion), use_container_width=True)
+    # Detalle Individual
+    with st.expander("Ver desglose por acción individual"):
+        df_ind = pd.DataFrame(datos_acciones)
+        if not df_ind.empty:
+            st.dataframe(df_ind.sort_values(by="Mi Valor", ascending=False), use_container_width=True)
 
-# 6. Gráfico Histórico al final
-st.divider()
-st.subheader("📈 Monitor de Tendencia")
-ticker_sel = st.selectbox("Selecciona una acción para ver su gráfico mensual", 
-                         ["NVDA", "VTI", "TSM", "AAPL", "GOOGL", "KOF", "COIN"])
-if ticker_sel:
-    hist = yf.Ticker(ticker_sel).history(period="1mo")
-    st.line_chart(hist.Close)
+st.info("Nota: Las cantidades se mantienen grabadas en el código. Si haces una compra grande, actualiza el número en la barra lateral.")
