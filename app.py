@@ -102,3 +102,16 @@ if st.button("🚀 ACTUALIZAR VALORES"):
             "Acción": "🟢 COMPRAR" if dif > 0 else "🔴 VENDER"
         })
     st.table(pd.DataFrame(analisis))
+# Detalle por Acción
+    with st.expander("🔍 Ver detalle por acción individual"):
+        st.dataframe(pd.DataFrame(datos_por_accion), use_container_width=True)
+
+# 6. Gráfico Histórico al final
+st.divider()
+st.subheader("📈 Monitor de Tendencia")
+ticker_sel = st.selectbox("Selecciona una acción para ver su gráfico mensual", 
+                         ["NVDA", "VTI", "TSM", "AAPL", "GOOGL", "KOF", "COIN"])
+if ticker_sel:
+    hist = yf.Ticker(ticker_sel).history(period="1mo")
+    st.line_chart(hist.Close)
+
