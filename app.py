@@ -18,7 +18,7 @@ OBJETIVOS = {
 # Mapeo de tus activos reales a las ramas
 activos_usuario = {
     "Rama 1 (VTI - Núcleo)": ["VTI"],
-    "Rama 2 (Tecnología/Crecimiento)": ["NVDA", "TSM", "GOOGL", "AAPL", "MU", "AVGO", "IONQ", "APP", "COIN"],
+    "Rama 2 (Tecnología/Crecimiento)": ["NVDA", "TSM", "CLS", "GOOGL", "AAPL", "MU", "AVGO", "IONQ", "APP", "COIN"],
     "Rama 3 (Oro/Refugio)": ["GLD"], 
     "Rama 4 (Bonos/Estabilidad)": ["BND"],
     "Rama 5 (Consumo/REITs)": ["KOF", "PEP", "COKE", "PG", "V", "BLK", "NU"]
